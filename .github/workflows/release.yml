@@ -1,0 +1,85 @@
+name: release
+
+# Push a tag to release: `git tag v1.2.3 && git push origin v1.2.3`.
+# Packagist reads versions from git tags, so the tag itself is the Composer release. This workflow
+# makes sure the tag is safe to ship, then publishes the GitHub Release (and pings Packagist when
+# its credentials are configured).
+
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: Version and changelog
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          coverage: none
+
+      - name: Tag matches Library::VERSION and CHANGELOG.md
+        run: php .github/scripts/check-release.php "${GITHUB_REF_NAME}" release-notes.md
+
+      - name: composer.json is valid
+        run: composer validate --strict --no-check-lock
+
+      - name: Keep release notes
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-notes
+          path: release-notes.md
+          retention-days: 1
+
+  tests:
+    name: Tests
+    needs: check
+    uses: ./.github/workflows/tests.yml
+
+  publish:
+    name: Publish
+    needs: [check, tests]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: Release notes
+        uses: actions/download-artifact@v4
+        with:
+          name: release-notes
+
+      - name: GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          prerelease=""
+          if [[ "$TAG" == *-* ]]; then prerelease="--prerelease"; fi
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --title "$TAG" --notes-file release-notes.md --verify-tag $prerelease
+
+      # Only needed when the Packagist GitHub integration is not connected. Set the repository
+      # secrets PACKAGIST_USERNAME and PACKAGIST_TOKEN (Packagist profile -> API token, the "safe" one).
+      - name: Notify Packagist
+        env:
+          PACKAGIST_USERNAME: ${{ secrets.PACKAGIST_USERNAME }}
+          PACKAGIST_TOKEN: ${{ secrets.PACKAGIST_TOKEN }}
+        if: env.PACKAGIST_USERNAME != '' && env.PACKAGIST_TOKEN != ''
+        run: |
+          curl --fail-with-body -sS -X POST \
+            "https://packagist.org/api/update-package?username=${PACKAGIST_USERNAME}&apiToken=${PACKAGIST_TOKEN}" \
+            -H 'Content-Type: application/json' \
+            -d "{\"repository\":{\"url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}\"}}"
