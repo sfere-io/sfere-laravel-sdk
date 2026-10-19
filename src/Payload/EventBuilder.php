@@ -3,6 +3,7 @@
 namespace Sfere\Payload;
 
 use DateTimeInterface;
+use Sfere\Context\ContextMerger;
 use Sfere\Sfere;
 
 /**
@@ -118,7 +119,9 @@ final class EventBuilder
      */
     public function context(array $context): self
     {
-        $this->context = array_replace_recursive($this->context, $context);
+        /** @var array<string, mixed> $merged */
+        $merged = ContextMerger::merge($this->context, $context);
+        $this->context = $merged;
 
         return $this;
     }

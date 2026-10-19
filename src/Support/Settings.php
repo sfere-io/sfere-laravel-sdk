@@ -30,6 +30,7 @@ final readonly class Settings
         public string $queueName = 'default',
         public int $queueTries = 5,
         public array $queueBackoff = [10, 30, 60, 120],
+        public bool $queueEncrypt = true,
         public float $timeout = 3.0,
         public float $connectTimeout = 2.0,
         public int $retries = 3,
@@ -53,7 +54,7 @@ final readonly class Settings
         $delivery = strtolower(self::string($get('delivery')) ?? 'batch');
 
         return new self(
-            enabled: self::bool($get('enabled', true)),
+            enabled: self::bool($get('enabled'), true),
             host: self::normaliseHost(self::string($get('host'))),
             writeKey: self::string($get('write_key')),
             delivery: in_array($delivery, self::DELIVERY_MODES, true) ? $delivery : 'batch',
@@ -64,16 +65,17 @@ final readonly class Settings
             queueName: self::string($get('queue.name')) ?? 'default',
             queueTries: max(1, self::int($get('queue.tries'), 5)),
             queueBackoff: array_values(array_map(static fn (mixed $s): int => max(0, self::int($s, 0)), (array) $get('queue.backoff', [10, 30, 60, 120]))),
+            queueEncrypt: self::bool($get('queue.encrypt'), true),
             timeout: max(0.1, self::float($get('http.timeout'), 3.0)),
             connectTimeout: max(0.1, self::float($get('http.connect_timeout'), 2.0)),
             retries: max(1, self::int($get('http.retries'), 3)),
             maxRetryAfter: max(0, self::int($get('http.max_retry_after'), 10)),
-            compression: self::bool($get('http.compression', false)),
-            includeRequest: self::bool($get('context.include_request', true)),
-            trustProxy: self::bool($get('context.trust_proxy', true)),
+            compression: self::bool($get('http.compression'), false),
+            includeRequest: self::bool($get('context.include_request'), true),
+            trustProxy: self::bool($get('context.trust_proxy'), true),
             anonymousIdCookie: self::string($get('context.anonymous_id_cookie', 'ajs_anonymous_id')),
             staticContext: self::assoc($get('context.static', [])),
-            throwExceptions: self::bool($get('throw_exceptions', false)),
+            throwExceptions: self::bool($get('throw_exceptions'), false),
             logChannel: self::string($get('log_channel')),
         );
     }
@@ -146,9 +148,17 @@ final readonly class Settings
         return $value === '' ? null : $value;
     }
 
-    private static function bool(mixed $value): bool
+    /**
+     * `true`/`"true"`/`"1"`/`"on"` and their opposites; null, `""` (an empty env var) or anything
+     * unparseable keep the default, so `SFERE_ENABLED=` does not silently disable the SDK.
+     */
+    private static function bool(mixed $value, bool $default): bool
     {
-        return filter_var($value, FILTER_VALIDATE_BOOLEAN);
+        if ($value === null || $value === '') {
+            return $default;
+        }
+
+        return filter_var($value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) ?? $default;
     }
 
     private static function int(mixed $value, int $default): int

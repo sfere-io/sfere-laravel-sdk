@@ -1,0 +1,12 @@
+{
+    "type": "identify",
+    "messageId": "m-1",
+    "userId": "user_123",
+    "timestamp": "2026-09-29T10:00:00.000Z",
+    "traits": { "email": "fan@example.com", "first_name": "Sara" },
+    "context": {
+        "ip": "203.0.113.7",
+        "userAgent": "Mozilla/5.0",
+        "library": { "name": "@fanfinity/sfere-laravel", "version": "*", "base": "*" }
+    }
+}
