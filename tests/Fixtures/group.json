@@ -1,0 +1,11 @@
+{
+    "type": "group",
+    "messageId": "group-company_42",
+    "userId": "user_123",
+    "timestamp": "2026-09-29T10:00:00.000Z",
+    "traits": { "name": "Acme", "plan": "pro" },
+    "groupId": "company_42",
+    "context": {
+        "library": { "name": "@fanfinity/sfere-laravel", "version": "*", "base": "*" }
+    }
+}

@@ -1,0 +1,14 @@
+{
+    "type": "page",
+    "messageId": "page-pricing-1",
+    "anonymousId": "a1b2c3d4-anon",
+    "timestamp": "2026-09-29T10:00:00.000Z",
+    "name": "Pricing",
+    "properties": { "url": "https://shop.example.com/pricing", "path": "/pricing", "title": "Pricing" },
+    "context": {
+        "ip": "203.0.113.7",
+        "userAgent": "Mozilla/5.0",
+        "page": { "url": "https://shop.example.com/pricing", "path": "/pricing", "search": "", "referrer": "https://www.google.com/" },
+        "library": { "name": "@fanfinity/sfere-laravel", "version": "*", "base": "*" }
+    }
+}

@@ -44,6 +44,7 @@ return [
         'name' => env('SFERE_QUEUE', 'default'),
         'tries' => 5,
         'backoff' => [10, 30, 60, 120],
+        'encrypt' => env('SFERE_QUEUE_ENCRYPT', true), // queued events carry PII
     ],
 
     'http' => [

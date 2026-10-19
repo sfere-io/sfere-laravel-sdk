@@ -1,0 +1,24 @@
+{
+    "type": "track",
+    "messageId": "order-456-purchase",
+    "userId": "user_123",
+    "timestamp": "2026-09-29T10:00:00.000Z",
+    "event": "purchase",
+    "properties": {
+        "transaction_id": "order_456",
+        "currency": "SAR",
+        "value": 179.98,
+        "items": [
+            { "item_id": "sku_123", "item_name": "Jersey", "price": 89.99, "quantity": 2 }
+        ],
+        "sfere_dedup_id": "order-456-purchase"
+    },
+    "context": {
+        "ip": "203.0.113.7",
+        "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)",
+        "traits": { "email": "fan@example.com", "phone": "+966500000000" },
+        "clientIds": { "fbp": "fb.1.1727500000000.123", "gclid": "CjwKCAj" },
+        "page": { "url": "https://shop.example.com/checkout/thanks" },
+        "library": { "name": "@fanfinity/sfere-laravel", "version": "*", "base": "*" }
+    }
+}
