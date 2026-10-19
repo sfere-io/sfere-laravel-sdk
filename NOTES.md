@@ -105,11 +105,41 @@ The SDK treats any 2xx without `ok === true` as a failure, as the Salla and Zid 
 
 ## How the Phase 2 live test is done
 
-_To be filled after the first run against staging._
+### Local Sfere stack, 2026-10-19 (done)
+
+Run against the local dev stack of the Sfere fork (`jitsu/dev-env`: ingest `jitsucom/ingest:2.14.0` on
+`:3049`, Kafka, rotor from source, console). Setup:
+
+- A stream `laravel-e2e-stream` with a **private** key `laraveles2s:…` and a public key, linked to a
+  webhook destination `laravel-e2e-webhook` → `http://localhost:9998/hook` (a local sink), created through the
+  console config API as `dev-env/jitsu-dev.sh smoke` does.
+- A fresh `laravel/laravel` 13.37 app (Guzzle 8) requiring this package through a symlinked path
+  repository. Auto-discovery and `php artisan sfere:install` worked.
+
+Results:
+
+| Check | Result |
+|---|---|
+| `sfere:test` with a wrong secret | `invalid write key (stream not found) … (HTTP 401, 1 attempt(s))`, exit 1, no retry |
+| `sfere:test` with the server key | `Event delivered (… HTTP 200)`, the event reached the webhook |
+| Batch mode, `GET /checkout/thanks` with `X-Forwarded-For: 203.0.113.7, 10.0.0.1`, an iPhone UA, `Accept-Language: ar-SA`, cookies `_fbp`, `_gcl_aw`, `_clck`, `ajs_anonymous_id=%22anon-7f3c%22`, `?utm_*&fbclid=` | `identify` + `purchase` delivered in one `/v1/batch` at terminate. `context.ip=203.0.113.7` (`requestIp` was the server's), `userAgent`, `locale=ar-SA`, `page`, `campaign`, `clientIds {fbp, gclid, clarity_uid, fbc=fb.1.<ms>.IwAR123}`, `anonymousId=anon-7f3c`, `messageId = sfere_dedup_id = purchase-order_98765`, library `@fanfinity/sfere-laravel 1.0.0 / laravel/framework@13.37.0` |
+| `TrackPageViews` on an HTML GET | `page` event with url/path/search, `clientIds.gclid` from the landing URL |
+| Queue mode (database queue) | one `SendEncryptedEvents` job per flush; the payload does not contain the IP in clear text; `queue:work` delivered both events with the context captured in the request |
+| Ingest unreachable (`SFERE_HOST=http://localhost:3999`) | the call returned its messageId, three attempts with backoff (~1.5 s, after the response), one `local.ERROR` line with count and messageIds (no key, no payload), exit 0 |
+
+Found while testing:
+
+- The package required `guzzlehttp/guzzle ^7.8`, but new Laravel 13 apps ship Guzzle 8: the install failed.
+  Fixed by dropping the direct requirement (`illuminate/http` already allows `^7.8.2 || ^8.0`). The suite
+  passes on Guzzle 7 and 8.
+- Not an SDK problem: the local rotor's Kafka consumer had died (`max.poll.interval.ms exceeded`, then
+  `Local: Fatal error`) while its health check still answered 200, so nothing left Kafka. Restarting rotor
+  delivered the backlog. Check `rpk group describe rotor` (MEMBERS must be 1) when local events vanish.
+
+### Staging (still to do)
 
 - Staging host: `TODO`
 - Stream / source: `TODO` (a `web` source with a **private** key)
 - Command: `SFERE_HOST=… SFERE_WRITE_KEY=… php artisan sfere:test`
-- Result: `TODO` (paste output)
-- Check in the stream's live events: the event `sfere_sdk_test` arrived, `context.library.name` is `@fanfinity/sfere-laravel`, and `context.ip` is as expected (the console has no request, so no IP; send one from a test route to verify a forwarded IP).
+- Result: `TODO`
 - Date / by: `TODO`
