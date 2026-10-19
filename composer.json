@@ -1,0 +1,68 @@
+{
+    "name": "fanfinity/sfere-laravel",
+    "description": "Sfere server SDK for Laravel: server-to-server event collection that forwards the end user's IP, user agent and ad click IDs",
+    "type": "library",
+    "license": "MIT",
+    "keywords": [
+        "sfere",
+        "laravel",
+        "analytics",
+        "cdp",
+        "server-side tracking",
+        "conversions api"
+    ],
+    "require": {
+        "php": "^8.2",
+        "guzzlehttp/guzzle": "^7.8",
+        "illuminate/console": "^12.0|^13.0",
+        "illuminate/contracts": "^12.0|^13.0",
+        "illuminate/http": "^12.0|^13.0",
+        "illuminate/queue": "^12.0|^13.0",
+        "illuminate/support": "^12.0|^13.0"
+    },
+    "require-dev": {
+        "larastan/larastan": "^3.0",
+        "laravel/pint": "^1.18",
+        "orchestra/testbench": "^10.0|^11.0",
+        "phpunit/phpunit": "^11.5|^12.0"
+    },
+    "suggest": {
+        "laravel/octane": "The buffer is flushed and reset on Octane's RequestTerminated event when Octane is installed."
+    },
+    "autoload": {
+        "psr-4": {
+            "Sfere\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Sfere\\Tests\\": "tests/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Sfere\\SfereServiceProvider"
+            ],
+            "aliases": {
+                "Sfere": "Sfere\\Facades\\Sfere"
+            }
+        }
+    },
+    "scripts": {
+        "test": "phpunit",
+        "analyse": "phpstan analyse --memory-limit=1G",
+        "format": "pint",
+        "lint": "pint --test",
+        "ci": [
+            "@lint",
+            "@analyse",
+            "@test"
+        ]
+    },
+    "config": {
+        "sort-packages": true
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}
