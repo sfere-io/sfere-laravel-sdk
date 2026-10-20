@@ -1,6 +1,8 @@
 * text=auto eol=lf
 
 /.github            export-ignore
+/.githooks          export-ignore
+/docs               export-ignore
 /tests              export-ignore
 /.editorconfig      export-ignore
 /.gitattributes     export-ignore
@@ -10,4 +12,6 @@
 /pint.json          export-ignore
 /NOTES.md           export-ignore
 /SFERE_SDK_SPEC*.md export-ignore
-/RELEASING.md       export-ignore
+/CONTRIBUTING.md    export-ignore
+/SECURITY.md        export-ignore
+/sonar-project.properties export-ignore

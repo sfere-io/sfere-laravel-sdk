@@ -1,5 +1,5 @@
 {
-    "name": "fanfinity/sfere-laravel",
+    "name": "sfere-io/sfere-laravel",
     "description": "Sfere server SDK for Laravel: server-to-server event collection that forwards the end user's IP, user agent and ad click IDs",
     "type": "library",
     "license": "MIT",
@@ -11,6 +11,11 @@
         "server-side tracking",
         "conversions api"
     ],
+    "homepage": "https://github.com/sfere-io/sfere-laravel-sdk",
+    "support": {
+        "issues": "https://github.com/sfere-io/sfere-laravel-sdk/issues",
+        "source": "https://github.com/sfere-io/sfere-laravel-sdk"
+    },
     "require": {
         "php": "^8.2",
         "illuminate/console": "^12.0|^13.0",

@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/sfere-io/sfere-laravel-sdk/security/policy
+    about: Report security issues privately to the maintainers — never in a public issue (see SECURITY.md).
+  - name: Integration guide
+    url: https://github.com/sfere-io/sfere-laravel-sdk/blob/main/README.md
+    about: Installation, configuration, delivery modes and testing with Sfere::fake().
