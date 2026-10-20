@@ -1,0 +1,426 @@
+name: ci
+
+# The quality gate. Pull requests: every job below must pass before merging (the
+# "protect-main" ruleset lists them as required checks). Pushes to main: the same
+# run, which also warms the Composer cache for the pull requests that follow.
+# workflow_call: release.yml reuses the whole gate before it releases, so a tag
+# can never ship code that did not pass the checks every PR passes.
+#
+# Jobs, and the gate each one is (docs/ci-cd.md has the long version):
+#   PHP style         Pint, the formatting the pre-commit hook applies
+#   Static analysis   PHPStan (level 8), composer validate --strict, composer audit
+#   API contract      no vendor names, no unannounced breaking change, the version/CHANGELOG rules
+#   Tests & coverage  the PHPUnit suite on PHP 8.4 / Laravel 13 with pcov coverage
+#   Compatibility     the suite on every supported PHP x Laravel pair, plus lowest dependencies
+#   SonarQube         SonarQube Cloud analysis of that coverage (skipped without SONAR_TOKEN)
+#   Build             the Composer archive, installed into a fresh Laravel app
+#
+# Not here: GitHub's dependency-review action needs Advanced Security on a private
+# repository. Dependabot alerts and `composer audit` cover vulnerable dependencies.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  push:
+    branches: [main]
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  PHP_VERSION: "8.4"
+
+jobs:
+  style:
+    name: PHP style
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # v2.40.0
+        with:
+          php-version: ${{ env.PHP_VERSION }}
+          coverage: none
+          tools: composer:v2
+      - name: Get Composer cache directory
+        id: composer-cache
+        run: echo "dir=$(composer config cache-dir)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          # A library commits no composer.lock: the cache follows composer.json.
+          key: ${{ runner.os }}-composer-${{ hashFiles('composer.json') }}
+          restore-keys: ${{ runner.os }}-composer-
+      - name: Install dependencies
+        run: composer update --prefer-dist --no-interaction --no-progress
+      - name: Pint
+        run: vendor/bin/pint --test
+
+  analysis:
+    name: Static analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # v2.40.0
+        with:
+          php-version: ${{ env.PHP_VERSION }}
+          coverage: none
+          tools: composer:v2
+      - name: Get Composer cache directory
+        id: composer-cache
+        run: echo "dir=$(composer config cache-dir)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: ${{ runner.os }}-composer-${{ hashFiles('composer.json') }}
+          restore-keys: ${{ runner.os }}-composer-
+      - name: composer.json is valid
+        run: composer validate --strict --no-check-lock
+      - name: Install dependencies
+        run: composer update --prefer-dist --no-interaction --no-progress
+      # Advisories for every resolved package, require-dev included.
+      - name: Known vulnerabilities
+        run: composer audit --no-interaction
+      - name: PHPStan
+        run: vendor/bin/phpstan analyse --memory-limit=1G --no-progress --error-format=github
+
+  contract:
+    name: API contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The rules below compare the pull request against its base.
+          fetch-depth: 0
+
+      # Client-facing material never names the ingestion vendor (company rule).
+      # Checked on every tracked file, code included: the SDK says "Sfere ingestion".
+      # NOTES.md and SFERE_SDK_SPEC*.md are the internal build notes: export-ignored
+      # in .gitattributes, so they never reach an app's vendor/ directory.
+      - name: No vendor names
+        run: |
+          # Spelled in pieces so this workflow does not match its own check.
+          PATTERN='jit''su|air''byte|click''house'
+          if git grep -n -i -E "$PATTERN" -- . ':!NOTES.md' ':!SFERE_SDK_SPEC.md' ':!SFERE_SDK_SPEC.orig.md'; then
+            echo "::error::The ingestion vendor is named above. Say 'Sfere ingestion' (rule in CONTRIBUTING.md)."
+            exit 1
+          fi
+          echo "No vendor names."
+
+      - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # v2.40.0
+        if: github.event_name == 'pull_request'
+        with:
+          php-version: ${{ env.PHP_VERSION }}
+          coverage: none
+          tools: composer:v2
+      - name: Get Composer cache directory
+        if: github.event_name == 'pull_request'
+        id: composer-cache
+        run: echo "dir=$(composer config cache-dir)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: github.event_name == 'pull_request'
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: ${{ runner.os }}-composer-${{ hashFiles('composer.json') }}
+          restore-keys: ${{ runner.os }}-composer-
+
+      # The public PHP API is what apps call. Roave's BC check compares it with the
+      # base branch's and lists every breaking change (removed or narrowed classes,
+      # methods, parameters, constants). A break is allowed only when Library::VERSION
+      # moves to a new major (0.x: a new minor), the same rule apis applies to its
+      # OpenAPI contract. The tool lives in its own directory, never in require-dev.
+      - name: A breaking API change moves the major version
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          composer update --prefer-dist --no-interaction --no-progress -q
+          BC_DIR="$RUNNER_TEMP/bc-check"
+          mkdir -p "$BC_DIR"
+          composer require --working-dir="$BC_DIR" --no-interaction --no-progress -q roave/backward-compatibility-check
+          set +e
+          "$BC_DIR/vendor/bin/roave-backward-compatibility-check" --from="origin/${BASE_REF}" --format=markdown > "$RUNNER_TEMP/bc.md" 2> "$RUNNER_TEMP/bc.err"
+          STATUS=$?
+          set -e
+          cat "$RUNNER_TEMP/bc.err"
+          if [ "$STATUS" -eq 0 ]; then
+            echo "No backwards-incompatible changes against ${BASE_REF}."
+            exit 0
+          fi
+          {
+            echo "## Breaking changes to the public API"
+            echo
+            cat "$RUNNER_TEMP/bc.md"
+          } >> "$GITHUB_STEP_SUMMARY"
+          version_of() { sed -n "s/.*const VERSION = '\([^']*\)';.*/\1/p"; }
+          BASE_VERSION="$(git show "origin/${BASE_REF}:src/Support/Library.php" | version_of)"
+          HEAD_VERSION="$(version_of < src/Support/Library.php)"
+          # The part of the version a breaking change must move: the major, or the minor before 1.0.
+          breaking_part() { case "$1" in 0.*) echo "$1" | cut -d. -f1-2 ;; *) echo "$1" | cut -d. -f1 ;; esac; }
+          if [ "$(breaking_part "$BASE_VERSION")" != "$(breaking_part "$HEAD_VERSION")" ]; then
+            echo "::notice::Breaking changes with a version move ${BASE_VERSION} -> ${HEAD_VERSION}: allowed. Describe them in CHANGELOG.md."
+            exit 0
+          fi
+          echo "::error file=src/Support/Library.php::The public API breaks (list in the job summary) but Library::VERSION stays on ${HEAD_VERSION}. Keep the API compatible, or move to the next major version."
+          exit 1
+
+      # A pushed tag is the Composer release, and a released version is immutable:
+      # the package must not change under a version that is already tagged.
+      # Library::VERSION (src/Support/Library.php) moves first. The same change set
+      # needs a CHANGELOG entry, unless the pull request carries the `skip-changelog` label.
+      - name: A change to the package bumps an unreleased version and the CHANGELOG
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+        run: |
+          VERSION="$(sed -n "s/.*const VERSION = '\([^']*\)';.*/\1/p" src/Support/Library.php)"
+          case "$VERSION" in
+            [0-9]*.[0-9]*.[0-9]*) ;;
+            *) echo "::error file=src/Support/Library.php::Library::VERSION='$VERSION' is not X.Y.Z or X.Y.Z-pre.N."; exit 1 ;;
+          esac
+          echo "Library::VERSION=$VERSION"
+          if git diff --quiet "origin/${BASE_REF}...HEAD" -- src config composer.json; then
+            echo "The package did not change; no version or CHANGELOG rule applies."
+            exit 0
+          fi
+          if git ls-remote --exit-code --tags origin "refs/tags/v${VERSION}" > /dev/null; then
+            echo "::error file=src/Support/Library.php::The package changed but Library::VERSION=${VERSION} is already released (tag v${VERSION} exists). Bump Library::VERSION."
+            exit 1
+          fi
+          echo "v${VERSION} is not tagged yet: the version is open for changes."
+          case ",${LABELS}," in
+            *,skip-changelog,*) echo "skip-changelog label: CHANGELOG entry not required."; exit 0 ;;
+          esac
+          if git diff --quiet "origin/${BASE_REF}...HEAD" -- CHANGELOG.md; then
+            echo "::error file=CHANGELOG.md::The package changed but CHANGELOG.md did not. Add the entry under '## [Unreleased]' (or label the pull request skip-changelog)."
+            exit 1
+          fi
+          echo "CHANGELOG.md moved with the package."
+
+  test:
+    name: Tests & coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # v2.40.0
+        with:
+          php-version: ${{ env.PHP_VERSION }}
+          extensions: mbstring, json, zlib
+          coverage: pcov
+          tools: composer:v2
+      - name: Get Composer cache directory
+        id: composer-cache
+        run: echo "dir=$(composer config cache-dir)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: ${{ runner.os }}-composer-${{ hashFiles('composer.json') }}
+          restore-keys: ${{ runner.os }}-composer-
+      - name: Install dependencies (Laravel 13)
+        run: |
+          composer require --dev "laravel/framework:13.*" "orchestra/testbench:11.*" --no-interaction --no-update
+          composer update --prefer-dist --no-interaction --no-progress
+      - name: PHPUnit with coverage
+        run: vendor/bin/phpunit --coverage-clover build/logs/clover.xml --log-junit build/logs/junit.xml
+      - name: Test and coverage summary
+        if: always()
+        run: |
+          python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import os, xml.etree.ElementTree as ET
+          if os.path.exists("build/logs/junit.xml"):
+              s = ET.parse("build/logs/junit.xml").getroot().find("testsuite")
+              print(f"### Tests: {s.get('tests')} run, {s.get('failures')} failed, {s.get('errors')} errors, {s.get('skipped')} skipped\n")
+          if os.path.exists("build/logs/clover.xml"):
+              m = ET.parse("build/logs/clover.xml").getroot().find("project/metrics")
+              print("| metric | % | covered |\n|---|---|---|")
+              for name, total, covered in (("line", "statements", "coveredstatements"),
+                                           ("method", "methods", "coveredmethods"),
+                                           ("element", "elements", "coveredelements")):
+                  t, c = int(m.get(total)), int(m.get(covered))
+                  print(f"| {name} | {100.0 * c / t if t else 0.0:.1f}% | {c}/{t} |")
+          else:
+              print("No coverage report was produced.")
+          PY
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: test-results
+          path: build/logs/
+          retention-days: 14
+
+  # Every supported PHP x Laravel pair, and the lowest versions composer.json allows.
+  # The legs report under their own names; the `Compatibility` job below is the one
+  # required check that stands for all of them.
+  compat-matrix:
+    name: PHP ${{ matrix.php }} / Laravel ${{ matrix.laravel }} ${{ matrix.stability == 'prefer-lowest' && '(lowest)' || '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.2', '8.3', '8.4']
+        laravel: ['12.*', '13.*']
+        stability: [prefer-stable]
+        include:
+          - laravel: '12.*'
+            testbench: '10.*'
+          - laravel: '13.*'
+            testbench: '11.*'
+          # Lowest supported dependencies.
+          - php: '8.2'
+            laravel: '12.*'
+            testbench: '10.*'
+            stability: prefer-lowest
+        exclude:
+          # Laravel 13 requires PHP ^8.3.
+          - php: '8.2'
+            laravel: '13.*'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # v2.40.0
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: mbstring, json, zlib
+          coverage: none
+          tools: composer:v2
+      - name: Get Composer cache directory
+        id: composer-cache
+        run: echo "dir=$(composer config cache-dir)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: ${{ runner.os }}-php${{ matrix.php }}-composer-${{ hashFiles('composer.json') }}
+          restore-keys: ${{ runner.os }}-php${{ matrix.php }}-composer-
+      - name: Install dependencies
+        env:
+          LARAVEL: ${{ matrix.laravel }}
+          TESTBENCH: ${{ matrix.testbench }}
+          STABILITY: ${{ matrix.stability }}
+        run: |
+          composer require --dev "laravel/framework:${LARAVEL}" "orchestra/testbench:${TESTBENCH}" --no-interaction --no-update
+          composer update "--${STABILITY}" --prefer-dist --no-interaction --no-progress
+      - name: PHPUnit
+        run: vendor/bin/phpunit
+
+  compatibility:
+    name: Compatibility
+    needs: compat-matrix
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Every PHP x Laravel leg passed
+        env:
+          RESULT: ${{ needs.compat-matrix.result }}
+        run: |
+          if [ "$RESULT" != "success" ]; then
+            echo "::error::At least one PHP x Laravel leg did not pass (result: ${RESULT}). See the legs above."
+            exit 1
+          fi
+          echo "Every PHP x Laravel leg passed."
+
+  # SonarQube Cloud: static analysis plus the coverage from `test`, through the
+  # SonarQube scan action (keys in sonar-project.properties). The scan needs
+  # SONAR_TOKEN (repository secret). Without it (Dependabot runs, forks) the job
+  # passes with a note, so the required "SonarQube" check stays green. With it, a
+  # failed quality gate fails the job (sonar.qualitygate.wait).
+  sonar:
+    name: SonarQube
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: env.SONAR_TOKEN != ''
+        with:
+          fetch-depth: 0 # blame data for new-code detection
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: env.SONAR_TOKEN != ''
+        with:
+          path: ~/.sonar/cache
+          key: ${{ runner.os }}-sonar
+          restore-keys: ${{ runner.os }}-sonar
+      # clover.xml holds absolute paths of the test runner's checkout, which is the
+      # same directory here (/home/runner/work/<repo>/<repo>), so they resolve as is.
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        if: env.SONAR_TOKEN != ''
+        with:
+          name: test-results
+          path: build/logs/
+      - name: SonarQube analysis
+        if: env.SONAR_TOKEN != ''
+        uses: SonarSource/sonarqube-scan-action@d209202bc7d53ff1cc128f7f907dac145c9d6ae9 # v8.3.0
+        env:
+          SONAR_TOKEN: ${{ env.SONAR_TOKEN }}
+      - name: Sonar skipped
+        if: env.SONAR_TOKEN == ''
+        run: echo "SONAR_TOKEN is not set; SonarQube Cloud analysis was skipped." >> "$GITHUB_STEP_SUMMARY"
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # v2.40.0
+        with:
+          php-version: ${{ env.PHP_VERSION }}
+          coverage: none
+          tools: composer:v2
+      # What Composer ships is `git archive` minus the export-ignore paths in
+      # .gitattributes. Build that archive and check it the way an app meets it.
+      - name: Composer archive
+        run: |
+          VERSION="$(sed -n "s/.*const VERSION = '\([^']*\)';.*/\1/p" src/Support/Library.php)"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          composer archive --format=zip --dir="$RUNNER_TEMP/dist" --file="sfere-laravel-${VERSION}"
+          ZIP="$RUNNER_TEMP/dist/sfere-laravel-${VERSION}.zip"
+          echo "ZIP=$ZIP" >> "$GITHUB_ENV"
+          unzip -Z1 "$ZIP" | sort > "$RUNNER_TEMP/contents.txt"
+          for f in composer.json LICENSE.md README.md CHANGELOG.md config/sfere.php src/SfereServiceProvider.php src/Support/Library.php; do
+            grep -qx "$f" "$RUNNER_TEMP/contents.txt" || { echo "::error::$f is missing from the archive."; exit 1; }
+          done
+          if grep -E '^(vendor/|build/|tests/|\.github/|\.githooks/|docs/|NOTES\.md|SFERE_SDK_SPEC|phpunit\.xml\.dist|phpstan\.neon|pint\.json|sonar-project\.properties)' "$RUNNER_TEMP/contents.txt"; then
+            echo "::error::The archive ships the development files listed above. Mark them export-ignore in .gitattributes."
+            exit 1
+          fi
+          {
+            echo "### Archive: sfere-io/sfere-laravel $VERSION ($(unzip -Z1 "$ZIP" | grep -vc '/$') files)"
+            echo
+            echo "sha256 \`$(sha256sum "$ZIP" | cut -d' ' -f1)\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+      # The archive in a fresh Laravel app: installs from it, auto-discovery registers
+      # the provider and the commands, and the config publishes under its tag.
+      - name: Install the archive into a fresh Laravel app
+        run: |
+          mkdir -p "$RUNNER_TEMP/pkg"
+          unzip -q "$ZIP" -d "$RUNNER_TEMP/pkg"
+          composer create-project laravel/laravel "$RUNNER_TEMP/app" --prefer-dist --no-interaction --no-progress -q
+          cd "$RUNNER_TEMP/app"
+          composer config repositories.sfere "{\"type\":\"path\",\"url\":\"$RUNNER_TEMP/pkg\",\"options\":{\"symlink\":false,\"versions\":{\"sfere-io/sfere-laravel\":\"$VERSION\"}}}"
+          composer require "sfere-io/sfere-laravel:$VERSION" --no-interaction --no-progress
+          php artisan package:discover | tee "$RUNNER_TEMP/discover.txt"
+          grep -q 'sfere-io/sfere-laravel' "$RUNNER_TEMP/discover.txt" || { echo "::error::Auto-discovery did not register the package."; exit 1; }
+          php artisan list --raw | grep -q '^sfere:install' || { echo "::error::The sfere:install command is not registered."; exit 1; }
+          php artisan list --raw | grep -q '^sfere:test' || { echo "::error::The sfere:test command is not registered."; exit 1; }
+          php artisan vendor:publish --tag=sfere-config --no-interaction
+          [ -s config/sfere.php ] || { echo "::error::vendor:publish --tag=sfere-config did not write config/sfere.php."; exit 1; }
+          php -r 'require "vendor/autoload.php"; exit(Sfere\Support\Library::VERSION === getenv("VERSION") ? 0 : 1);' \
+            || { echo "::error::The installed Library::VERSION is not $VERSION."; exit 1; }
+          echo "The archive installs into a fresh Laravel app, and the provider, commands and config are discovered."
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sfere-laravel
+          path: ${{ env.ZIP }}
+          retention-days: 14

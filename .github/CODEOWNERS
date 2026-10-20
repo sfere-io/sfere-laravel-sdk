@@ -1,0 +1,26 @@
+# Code owners for sfere-io/sfere-laravel-sdk.
+#
+# Format: <pattern>   <owner> [<owner> ...]
+# Last matching pattern wins. Required review from code owners is enforced by the
+# "protect-main" ruleset: a pull request touching a listed path can only merge
+# once one of its owners has approved. Paths with no owner here still need the
+# ruleset's one approval from any collaborator.
+#
+# The owners are the SDK maintainers. When a GitHub team exists for them, replace
+# the logins with the team (@sfere-io/<team>), as sfere-io/apis does.
+
+# Sensitive paths: what CI runs, what the package ships and declares, and the
+# version every event carries on the wire. A maintainer approves these.
+/.github/                       @mabumusa1 @KaramYaaqba
+/.githooks/                     @mabumusa1 @KaramYaaqba
+/composer.json                  @mabumusa1 @KaramYaaqba
+/phpstan.neon                   @mabumusa1 @KaramYaaqba
+/phpunit.xml.dist               @mabumusa1 @KaramYaaqba
+/pint.json                      @mabumusa1 @KaramYaaqba
+/.gitattributes                 @mabumusa1 @KaramYaaqba
+/sonar-project.properties       @mabumusa1 @KaramYaaqba
+/src/Support/Library.php        @mabumusa1 @KaramYaaqba
+/config/                        @mabumusa1 @KaramYaaqba
+/SECURITY.md                    @mabumusa1 @KaramYaaqba
+/CONTRIBUTING.md                @mabumusa1 @KaramYaaqba
+/docs/ci-cd.md                  @mabumusa1 @KaramYaaqba

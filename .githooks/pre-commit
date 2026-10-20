@@ -1,0 +1,52 @@
+#!/bin/sh
+#
+# Pre-commit hook:
+#   1. refuse a commit whose staged files name the ingestion vendor (company rule:
+#      say "Sfere ingestion");
+#   2. run Pint on the staged PHP files and re-stage what it rewrote.
+#
+# CI's "PHP style" and "API contract" jobs are the real gates; this is fast
+# feedback at commit time. PHPStan and the tests stay CI-and-on-demand
+# (`composer ci`).
+#
+# Install once per clone (after `composer install`, which provides Pint):
+#
+#     git config core.hooksPath .githooks
+#
+# `git commit --no-verify` skips the hook.
+
+set -e
+
+cd "$(git rev-parse --show-toplevel)"
+
+# --- vendor names -----------------------------------------------------------
+# Staged content only (the index, not the working tree). NOTES.md and the
+# SFERE_SDK_SPEC files are internal build notes that never ship (export-ignore),
+# the same exclusions as CI.
+# Spelled in pieces so this file does not match its own check.
+vendor_pattern='jit''su|air''byte|click''house'
+staged="$(git diff --cached --name-only --diff-filter=ACMR -- . ':!NOTES.md' ':!SFERE_SDK_SPEC.md' ':!SFERE_SDK_SPEC.orig.md')"
+if [ -n "$staged" ]; then
+    hits="$(printf '%s\n' "$staged" | while IFS= read -r f; do
+        git show ":$f" | grep -n -i -E "$vendor_pattern" | sed "s|^|$f:|" || true
+    done)"
+    if [ -n "$hits" ]; then
+        printf '%s\n' "$hits" >&2
+        echo "pre-commit: the ingestion vendor is named above. Say 'Sfere ingestion' (rule in CONTRIBUTING.md)." >&2
+        exit 1
+    fi
+fi
+
+# --- PHP style ----------------------------------------------------------------
+if ! git diff --cached --quiet --diff-filter=ACMR -- '*.php'; then
+    if [ ! -x vendor/bin/pint ]; then
+        echo "pre-commit: vendor/bin/pint is missing. Run composer install." >&2
+        exit 1
+    fi
+    git diff --cached --name-only --diff-filter=ACMR -z -- '*.php' \
+        | xargs -0 vendor/bin/pint -q --
+    # Re-stage the (possibly rewritten) files so the commit holds the formatted code.
+    # Working-tree semantics: unstaged hunks of these files are staged along with them.
+    git diff --cached --name-only --diff-filter=ACMR -z -- '*.php' \
+        | xargs -0 -r git add --
+fi

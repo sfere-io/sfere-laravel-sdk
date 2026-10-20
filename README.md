@@ -1,5 +1,8 @@
 # Sfere for Laravel
 
+[![CI](https://github.com/sfere-io/sfere-laravel-sdk/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/sfere-io/sfere-laravel-sdk/actions/workflows/ci.yml)
+[![Release](https://github.com/sfere-io/sfere-laravel-sdk/actions/workflows/release.yml/badge.svg)](https://github.com/sfere-io/sfere-laravel-sdk/actions/workflows/release.yml)
+
 Send analytics and conversion events from your Laravel backend to **Sfere ingestion**.
 
 The SDK forwards your customer's IP, user agent and ad click IDs with every server event. Ad-platform conversion APIs (Meta, TikTok, Google Ads, Snap, …) match on exactly these values. Sfere ingestion does not fill them in for server-sent events: the request comes from your server, not from your customer.
@@ -48,9 +51,11 @@ Sfere::forUser(auth()->user())->track(Event::PURCHASE, [
 ## Installation
 
 ```bash
-composer require fanfinity/sfere-laravel
+composer require sfere-io/sfere-laravel
 php artisan sfere:install
 ```
+
+The package is published on packagist.org from its first release. Until then the repository is private, and Composer installs it from GitHub: add the repository and a token first ([docs/ci-cd.md, "Until then"](docs/ci-cd.md#until-then)).
 
 The service provider and the `Sfere` facade are auto-discovered. `sfere:install` publishes `config/sfere.php` and prints the environment variables to add:
 
@@ -546,6 +551,10 @@ To skip more paths, extend the class and override `$except`.
 | The IP is wrong or spoofable | The app is reached directly: set `context.trust_proxy` to `false` and configure Laravel's TrustProxies |
 | Events arrive late | In `batch` mode, events leave at the end of the request, job or command. Long-running processes flush every `batch.max_wait_seconds` |
 | Some events are rejected in a batch | Listen for `DeliveryFailed`. Its `reason` comes from ingestion, and those events are not retried |
+
+## Contributing
+
+Pull request policy, local setup and the CI checks: [CONTRIBUTING.md](CONTRIBUTING.md) and [docs/ci-cd.md](docs/ci-cd.md).
 
 ## License
 

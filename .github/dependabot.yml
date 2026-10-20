@@ -1,0 +1,27 @@
+version: 2
+updates:
+  # A library commits no composer.lock: Dependabot raises the constraints in
+  # composer.json's require-dev, and alerts on what the constraints allow.
+  - package-ecosystem: composer
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "php"]
+    groups:
+      composer-minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "github_actions"]
+    groups:
+      actions:
+        patterns:
+          - "*"
