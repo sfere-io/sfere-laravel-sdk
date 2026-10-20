@@ -2,6 +2,17 @@
 
 [![CI](https://github.com/sfere-io/sfere-laravel-sdk/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/sfere-io/sfere-laravel-sdk/actions/workflows/ci.yml)
 [![Release](https://github.com/sfere-io/sfere-laravel-sdk/actions/workflows/release.yml/badge.svg)](https://github.com/sfere-io/sfere-laravel-sdk/actions/workflows/release.yml)
+[![Quality gate status](https://sonarcloud.io/api/project_badges/measure?project=sfere-io_sfere-laravel-sdk&metric=alert_status&token=5ce54b41d60fc02e3830d76b53910d1bbb50520b)](https://sonarcloud.io/summary/new_code?id=sfere-io_sfere-laravel-sdk)
+[![Coverage](https://sonarcloud.io/api/project_badges/measure?project=sfere-io_sfere-laravel-sdk&metric=coverage&token=5ce54b41d60fc02e3830d76b53910d1bbb50520b)](https://sonarcloud.io/summary/new_code?id=sfere-io_sfere-laravel-sdk)
+[![Lines of Code](https://sonarcloud.io/api/project_badges/measure?project=sfere-io_sfere-laravel-sdk&metric=ncloc&token=5ce54b41d60fc02e3830d76b53910d1bbb50520b)](https://sonarcloud.io/summary/new_code?id=sfere-io_sfere-laravel-sdk)
+[![Duplicated Lines (%)](https://sonarcloud.io/api/project_badges/measure?project=sfere-io_sfere-laravel-sdk&metric=duplicated_lines_density&token=5ce54b41d60fc02e3830d76b53910d1bbb50520b)](https://sonarcloud.io/summary/new_code?id=sfere-io_sfere-laravel-sdk)
+[![Reliability Rating](https://sonarcloud.io/api/project_badges/measure?project=sfere-io_sfere-laravel-sdk&metric=reliability_rating&token=5ce54b41d60fc02e3830d76b53910d1bbb50520b)](https://sonarcloud.io/summary/new_code?id=sfere-io_sfere-laravel-sdk)
+[![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=sfere-io_sfere-laravel-sdk&metric=security_rating&token=5ce54b41d60fc02e3830d76b53910d1bbb50520b)](https://sonarcloud.io/summary/new_code?id=sfere-io_sfere-laravel-sdk)
+[![Maintainability Rating](https://sonarcloud.io/api/project_badges/measure?project=sfere-io_sfere-laravel-sdk&metric=sqale_rating&token=5ce54b41d60fc02e3830d76b53910d1bbb50520b)](https://sonarcloud.io/summary/new_code?id=sfere-io_sfere-laravel-sdk)
+[![Reliability Issues](https://sonarcloud.io/api/project_badges/measure?project=sfere-io_sfere-laravel-sdk&metric=software_quality_reliability_issues&token=5ce54b41d60fc02e3830d76b53910d1bbb50520b)](https://sonarcloud.io/summary/new_code?id=sfere-io_sfere-laravel-sdk)
+[![Security Issues](https://sonarcloud.io/api/project_badges/measure?project=sfere-io_sfere-laravel-sdk&metric=software_quality_security_issues&token=5ce54b41d60fc02e3830d76b53910d1bbb50520b)](https://sonarcloud.io/summary/new_code?id=sfere-io_sfere-laravel-sdk)
+[![Maintainability Issues](https://sonarcloud.io/api/project_badges/measure?project=sfere-io_sfere-laravel-sdk&metric=software_quality_maintainability_issues&token=5ce54b41d60fc02e3830d76b53910d1bbb50520b)](https://sonarcloud.io/summary/new_code?id=sfere-io_sfere-laravel-sdk)
+[![Technical Debt](https://sonarcloud.io/api/project_badges/measure?project=sfere-io_sfere-laravel-sdk&metric=sqale_index&token=5ce54b41d60fc02e3830d76b53910d1bbb50520b)](https://sonarcloud.io/summary/new_code?id=sfere-io_sfere-laravel-sdk)
 
 Send analytics and conversion events from your Laravel backend to **Sfere ingestion**.
 
@@ -51,11 +62,11 @@ Sfere::forUser(auth()->user())->track(Event::PURCHASE, [
 ## Installation
 
 ```bash
-composer require sfere-io/sfere-laravel
+composer require "sfere-io/sfere-laravel:^0.1.0-beta.1"
 php artisan sfere:install
 ```
 
-The package is published on packagist.org from its first release. Until then the repository is private, and Composer installs it from GitHub: add the repository and a token first ([docs/ci-cd.md, "Until then"](docs/ci-cd.md#until-then)).
+During the beta, name the version (`^0.1.0-beta.1`): a plain `composer require` only picks stable releases. The package goes on packagist.org when the repository is public. Until then the repository is private, and Composer installs it from GitHub: add the repository and a token first ([docs/ci-cd.md, "Until then"](docs/ci-cd.md#until-then)).
 
 The service provider and the `Sfere` facade are auto-discovered. `sfere:install` publishes `config/sfere.php` and prints the environment variables to add:
 

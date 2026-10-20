@@ -6,11 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
-## [1.0.0] - 2026-10-19
+## [0.1.0-beta.1] - 2026-10-20
 
 ### Added
 
-- Published on packagist.org as `sfere-io/sfere-laravel` (the GitHub organization moved from fanfinity to sfere-io on 2026-10-20; nothing was released under the old name).
+- Composer package `sfere-io/sfere-laravel` (the GitHub organization moved from fanfinity to sfere-io on 2026-10-20; nothing was released under the old name). It goes on packagist.org once the repository is public.
 - `track`, `identify`, `page`, `group` and `alias`. Each returns the event's messageId.
 - `Sfere::event()` fluent builder.
 - Scoped clients `forUser()`, `anonymous()` and `withContext()`, with `resolveUserIdUsing()` and `resolveTraitsUsing()` resolvers.
@@ -33,5 +33,5 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Validation: messageId format, event name length, placeholder user ids, a userId or anonymousId required, and a 900 KB event size limit.
 - No-op mode with a single warning when the SDK is disabled or misconfigured.
 
-[Unreleased]: https://github.com/sfere-io/sfere-laravel-sdk/compare/v1.0.0...HEAD
-[1.0.0]: https://github.com/sfere-io/sfere-laravel-sdk/releases/tag/v1.0.0
+[Unreleased]: https://github.com/sfere-io/sfere-laravel-sdk/compare/v0.1.0-beta.1...HEAD
+[0.1.0-beta.1]: https://github.com/sfere-io/sfere-laravel-sdk/releases/tag/v0.1.0-beta.1
