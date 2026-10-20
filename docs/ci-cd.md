@@ -125,7 +125,7 @@ whole history, so first:
    the repository webhook) so new tags appear by themselves. Without it, set the
    repository secrets `PACKAGIST_USERNAME` and `PACKAGIST_TOKEN` and the release
    workflow notifies Packagist itself.
-4. Tag the first release (`v1.0.0`, see [Releasing](#releasing)). The release
+4. Tag the first release (`v0.1.0-beta.1`, see [Releasing](#releasing)). The release
    workflow's last step waits for packagist.org to list the version and installs it
    from there.
 
