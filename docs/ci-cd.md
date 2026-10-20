@@ -194,7 +194,7 @@ together with their own. Two consequences:
 
 | Name | Where | Used by |
 |---|---|---|
-| `SONAR_TOKEN` | repository secret (**not set yet**) | the `SonarQube` job. SonarQube Cloud project `sfere-io_sfere-laravel-sdk` in organization `sfere-io` |
+| `SONAR_TOKEN` | repository secret (set 2026-10-20) | the `SonarQube` job. SonarQube Cloud project `sfere-io_sfere-laravel-sdk` in organization `sfere-io`: https://sonarcloud.io/project/overview?id=sfere-io_sfere-laravel-sdk |
 | `PACKAGIST_USERNAME`, `PACKAGIST_TOKEN` | repository secrets (optional, not set) | the release's Packagist notification |
 | `GITHUB_TOKEN` | automatic | the release's consumer install and the GitHub release |
 
