@@ -1,13 +1,28 @@
 name: release
 
-# Push a tag to release: `git tag v1.2.3 && git push origin v1.2.3`.
-# Packagist reads versions from git tags, so the tag itself is the Composer release. This workflow
-# makes sure the tag is safe to ship, then publishes the GitHub Release (and pings Packagist when
-# its credentials are configured).
+# Cuts the GitHub release for a version tag.
+#
+# Composer installs versions straight from git tags, so the pushed tag itself is
+# the release; this workflow proves the tag is safe and consumable, then publishes
+# the GitHub release. Creating the tag is the privileged act: the "release-tags"
+# ruleset lets only repository admins create `v*` tags, and the `release`
+# environment accepts only `v*` refs. Required-reviewer gates are not available on
+# this plan, so the tag ruleset is the gate.
+#
+# Flow: the same CI gate every pull request passes (ci.yml, via workflow_call) ->
+# the tag must equal Library::VERSION, have a dated CHANGELOG section and point at
+# a commit on main -> install fanfinity/sfere-laravel:VERSION from this repository
+# into a fresh project, as an app would, and check the installed version -> GitHub
+# release with the CHANGELOG section as notes and the Composer archive attached
+# -> notify Packagist when its credentials are configured.
+#
+# A tag never moves (the "protect-tags" ruleset): apps that installed a version
+# must keep getting the same code. To ship a fix, bump Library::VERSION and tag
+# again. Developer-facing instructions: docs/ci-cd.md.
 
 on:
   push:
-    tags: ['v*.*.*']
+    tags: ["v*"]
 
 permissions:
   contents: read
@@ -17,69 +32,125 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  check:
-    name: Version and changelog
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up PHP
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: '8.4'
-          coverage: none
-
-      - name: Tag matches Library::VERSION and CHANGELOG.md
-        run: php .github/scripts/check-release.php "${GITHUB_REF_NAME}" release-notes.md
-
-      - name: composer.json is valid
-        run: composer validate --strict --no-check-lock
-
-      - name: Keep release notes
-        uses: actions/upload-artifact@v4
-        with:
-          name: release-notes
-          path: release-notes.md
-          retention-days: 1
-
-  tests:
-    name: Tests
-    needs: check
-    uses: ./.github/workflows/tests.yml
+  ci:
+    uses: ./.github/workflows/ci.yml
+    secrets: inherit
 
   publish:
-    name: Publish
-    needs: [check, tests]
+    name: Release
+    needs: ci
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 20
+    environment: release
     permissions:
-      contents: write
+      contents: write # the GitHub release
     steps:
-      - name: Release notes
-        uses: actions/download-artifact@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          name: release-notes
+          fetch-depth: 0 # "the tag is on main" is checked below
+      - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # v2.40.0
+        with:
+          php-version: "8.4"
+          coverage: none
+          tools: composer:v2
 
-      - name: GitHub Release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.ref_name }}
+      # Tag format, tag == Library::VERSION, and a dated, non-empty CHANGELOG
+      # section, which becomes the release notes (.github/scripts/check-release.php).
+      - name: Resolve and check the version
         run: |
-          prerelease=""
-          if [[ "$TAG" == *-* ]]; then prerelease="--prerelease"; fi
-          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --title "$TAG" --notes-file release-notes.md --verify-tag $prerelease
+          TAG="${GITHUB_REF_NAME}"
+          php .github/scripts/check-release.php "$TAG" "$RUNNER_TEMP/notes.md"
+          VERSION="${TAG#v}"
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::Tag ${TAG} points at ${GITHUB_SHA::7}, which is not on main. Release only what went through a pull request."
+            exit 1
+          fi
+          case "$VERSION" in
+            *-*) PRERELEASE=true ;;
+            *) PRERELEASE=false ;;
+          esac
+          echo "VERSION=$VERSION"       >> "$GITHUB_ENV"
+          echo "TAG=$TAG"               >> "$GITHUB_ENV"
+          echo "PRERELEASE=$PRERELEASE" >> "$GITHUB_ENV"
+          echo "::notice::Releasing fanfinity/sfere-laravel ${VERSION} (prerelease=${PRERELEASE})."
 
-      # Only needed when the Packagist GitHub integration is not connected. Set the repository
-      # secrets PACKAGIST_USERNAME and PACKAGIST_TOKEN (Packagist profile -> API token, the "safe" one).
+      - name: Composer archive
+        run: |
+          composer archive --format=zip --dir="$RUNNER_TEMP/dist" --file="sfere-laravel-${VERSION}"
+          ZIP="$RUNNER_TEMP/dist/sfere-laravel-${VERSION}.zip"
+          echo "ZIP=$ZIP" >> "$GITHUB_ENV"
+          echo "ZIP_SHA256=$(sha256sum "$ZIP" | cut -d' ' -f1)" >> "$GITHUB_ENV"
+
+      # The tag as an app consumes it: Composer resolves fanfinity/sfere-laravel:VERSION
+      # from this repository (a `vcs` repository, authenticated with the Actions
+      # token while the repository is private) and installs it with its dependencies.
+      - name: Install the tagged version as an app would
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          APP="$RUNNER_TEMP/consumer"
+          mkdir -p "$APP"
+          cd "$APP"
+          composer config --global github-oauth.github.com "$GITHUB_TOKEN"
+          cat > composer.json <<JSON
+          {
+            "name": "sfere/release-check",
+            "require": { "fanfinity/sfere-laravel": "${VERSION}" },
+            "repositories": [{ "type": "vcs", "url": "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}" }]
+          }
+          JSON
+          composer install --prefer-dist --no-interaction --no-progress
+          INSTALLED="$(php -r 'require "vendor/autoload.php"; echo Sfere\Support\Library::VERSION;')"
+          if [ "$INSTALLED" != "$VERSION" ]; then
+            echo "::error::Composer installed Library::VERSION=${INSTALLED} for ${TAG}, expected ${VERSION}."
+            exit 1
+          fi
+          composer show fanfinity/sfere-laravel | grep -E '^(versions|source|dist)'
+          echo "::notice::fanfinity/sfere-laravel ${VERSION} installs from the tag."
+
+      - name: Release notes from the CHANGELOG
+        run: |
+          {
+            echo
+            echo "## Install"
+            echo
+            echo '```bash'
+            echo "composer require fanfinity/sfere-laravel:^${VERSION}"
+            echo '```'
+            echo
+            echo "While the repository is private, add it as a \`vcs\` repository and give Composer a GitHub token with read access (docs/ci-cd.md, \"Consuming the package\")."
+            echo
+            echo "Composer archive sha256: \`${ZIP_SHA256}\`"
+          } >> "$RUNNER_TEMP/notes.md"
+          cat "$RUNNER_TEMP/notes.md"
+
+      - name: GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ARGS=(--title "$TAG" --notes-file "$RUNNER_TEMP/notes.md" --verify-tag)
+          if [ "$PRERELEASE" = "true" ]; then ARGS+=(--prerelease); fi
+          gh release create "$TAG" "${ARGS[@]}" "$ZIP"
+          {
+            echo "### Released fanfinity/sfere-laravel ${VERSION}"
+            echo
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Tag | \`${TAG}\` |"
+            echo "| Release | https://github.com/${GITHUB_REPOSITORY}/releases/tag/${TAG} |"
+            echo "| Archive sha256 | \`${ZIP_SHA256}\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Only needed once the package is on packagist.org and the Packagist GitHub
+      # integration is not connected. Set the repository secrets PACKAGIST_USERNAME
+      # and PACKAGIST_TOKEN (Packagist profile -> the "safe" API token).
       - name: Notify Packagist
         env:
           PACKAGIST_USERNAME: ${{ secrets.PACKAGIST_USERNAME }}
           PACKAGIST_TOKEN: ${{ secrets.PACKAGIST_TOKEN }}
         if: env.PACKAGIST_USERNAME != '' && env.PACKAGIST_TOKEN != ''
         run: |
-          curl --fail-with-body -sS -X POST \
+          curl --fail-with-body -sS --proto '=https' -X POST \
             "https://packagist.org/api/update-package?username=${PACKAGIST_USERNAME}&apiToken=${PACKAGIST_TOKEN}" \
             -H 'Content-Type: application/json' \
             -d "{\"repository\":{\"url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}\"}}"

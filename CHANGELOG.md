@@ -2,7 +2,7 @@
 
 All notable changes to `fanfinity/sfere-laravel` are documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). The `release` workflow uses the section for the tagged version as the GitHub release notes, so write entries for app developers. Every change to the package adds an entry under `## [Unreleased]` (CI checks it; see `docs/ci-cd.md`).
 
 ## [Unreleased]
 
@@ -32,5 +32,5 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Validation: messageId format, event name length, placeholder user ids, a userId or anonymousId required, and a 900 KB event size limit.
 - No-op mode with a single warning when the SDK is disabled or misconfigured.
 
-[Unreleased]: https://github.com/fanfinity/sfere-laravel/compare/v1.0.0...HEAD
-[1.0.0]: https://github.com/fanfinity/sfere-laravel/releases/tag/v1.0.0
+[Unreleased]: https://github.com/sfere-io/sfere-laravel-sdk/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/sfere-io/sfere-laravel-sdk/releases/tag/v1.0.0
