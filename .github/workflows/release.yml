@@ -11,10 +11,12 @@ name: release
 #
 # Flow: the same CI gate every pull request passes (ci.yml, via workflow_call) ->
 # the tag must equal Library::VERSION, have a dated CHANGELOG section and point at
-# a commit on main -> install fanfinity/sfere-laravel:VERSION from this repository
+# a commit on main -> install sfere-io/sfere-laravel:VERSION from this repository
 # into a fresh project, as an app would, and check the installed version -> GitHub
 # release with the CHANGELOG section as notes and the Composer archive attached
-# -> notify Packagist when its credentials are configured.
+# -> notify Packagist when its credentials are configured -> once the repository
+# is public, wait for packagist.org to list the version and install it from there,
+# the way every app will.
 #
 # A tag never moves (the "protect-tags" ruleset): apps that installed a version
 # must keep getting the same code. To ship a fix, bump Library::VERSION and tag
@@ -72,7 +74,7 @@ jobs:
           echo "VERSION=$VERSION"       >> "$GITHUB_ENV"
           echo "TAG=$TAG"               >> "$GITHUB_ENV"
           echo "PRERELEASE=$PRERELEASE" >> "$GITHUB_ENV"
-          echo "::notice::Releasing fanfinity/sfere-laravel ${VERSION} (prerelease=${PRERELEASE})."
+          echo "::notice::Releasing sfere-io/sfere-laravel ${VERSION} (prerelease=${PRERELEASE})."
 
       - name: Composer archive
         run: |
@@ -81,7 +83,7 @@ jobs:
           echo "ZIP=$ZIP" >> "$GITHUB_ENV"
           echo "ZIP_SHA256=$(sha256sum "$ZIP" | cut -d' ' -f1)" >> "$GITHUB_ENV"
 
-      # The tag as an app consumes it: Composer resolves fanfinity/sfere-laravel:VERSION
+      # The tag as an app consumes it: Composer resolves sfere-io/sfere-laravel:VERSION
       # from this repository (a `vcs` repository, authenticated with the Actions
       # token while the repository is private) and installs it with its dependencies.
       - name: Install the tagged version as an app would
@@ -95,7 +97,7 @@ jobs:
           cat > composer.json <<JSON
           {
             "name": "sfere/release-check",
-            "require": { "fanfinity/sfere-laravel": "${VERSION}" },
+            "require": { "sfere-io/sfere-laravel": "${VERSION}" },
             "repositories": [{ "type": "vcs", "url": "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}" }]
           }
           JSON
@@ -105,8 +107,8 @@ jobs:
             echo "::error::Composer installed Library::VERSION=${INSTALLED} for ${TAG}, expected ${VERSION}."
             exit 1
           fi
-          composer show fanfinity/sfere-laravel | grep -E '^(versions|source|dist)'
-          echo "::notice::fanfinity/sfere-laravel ${VERSION} installs from the tag."
+          composer show sfere-io/sfere-laravel | grep -E '^(versions|source|dist)'
+          echo "::notice::sfere-io/sfere-laravel ${VERSION} installs from the tag."
 
       - name: Release notes from the CHANGELOG
         run: |
@@ -115,7 +117,7 @@ jobs:
             echo "## Install"
             echo
             echo '```bash'
-            echo "composer require fanfinity/sfere-laravel:^${VERSION}"
+            echo "composer require sfere-io/sfere-laravel:^${VERSION}"
             echo '```'
             echo
             echo "While the repository is private, add it as a \`vcs\` repository and give Composer a GitHub token with read access (docs/ci-cd.md, \"Consuming the package\")."
@@ -132,7 +134,7 @@ jobs:
           if [ "$PRERELEASE" = "true" ]; then ARGS+=(--prerelease); fi
           gh release create "$TAG" "${ARGS[@]}" "$ZIP"
           {
-            echo "### Released fanfinity/sfere-laravel ${VERSION}"
+            echo "### Released sfere-io/sfere-laravel ${VERSION}"
             echo
             echo "| | |"
             echo "|---|---|"
@@ -141,9 +143,9 @@ jobs:
             echo "| Archive sha256 | \`${ZIP_SHA256}\` |"
           } >> "$GITHUB_STEP_SUMMARY"
 
-      # Only needed once the package is on packagist.org and the Packagist GitHub
-      # integration is not connected. Set the repository secrets PACKAGIST_USERNAME
-      # and PACKAGIST_TOKEN (Packagist profile -> the "safe" API token).
+      # Only needed when the Packagist GitHub integration is not connected (the
+      # webhook makes Packagist read new tags by itself). Set the repository secrets
+      # PACKAGIST_USERNAME and PACKAGIST_TOKEN (Packagist profile -> the "safe" API token).
       - name: Notify Packagist
         env:
           PACKAGIST_USERNAME: ${{ secrets.PACKAGIST_USERNAME }}
@@ -154,3 +156,42 @@ jobs:
             "https://packagist.org/api/update-package?username=${PACKAGIST_USERNAME}&apiToken=${PACKAGIST_TOKEN}" \
             -H 'Content-Type: application/json' \
             -d "{\"repository\":{\"url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}\"}}"
+
+      # packagist.org is where apps get the package. It serves public repositories
+      # only, so while this one is private the step records why it did not run.
+      # Once public: wait for Packagist to list the version (its webhook, or the
+      # notification above, makes it re-read the tags), then install it from
+      # packagist.org alone, with no GitHub repository or token configured.
+      - name: Verify the version on packagist.org
+        env:
+          PUBLIC: ${{ github.event.repository.private == false }}
+        run: |
+          if [ "$PUBLIC" != "true" ]; then
+            echo "The repository is private, so packagist.org cannot serve it yet; the vcs install above is the check." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          META="https://repo.packagist.org/p2/sfere-io/sfere-laravel.json"
+          for attempt in $(seq 1 40); do
+            if curl -fsSL --proto '=https' "$META?t=$(date +%s)" \
+                 | php -r '$m = json_decode(stream_get_contents(STDIN), true); foreach ($m["packages"]["sfere-io/sfere-laravel"] ?? [] as $p) { if (($p["version"] ?? "") === $argv[1]) exit(0); } exit(1);' "$VERSION"; then
+              echo "packagist.org lists ${VERSION} (attempt ${attempt})."
+              break
+            fi
+            if [ "$attempt" -eq 40 ]; then
+              echo "::error::packagist.org does not list sfere-io/sfere-laravel ${VERSION} after 10 minutes. Check the package's page on packagist.org (is the GitHub hook connected?)."
+              exit 1
+            fi
+            sleep 15
+          done
+          APP="$RUNNER_TEMP/packagist-consumer"
+          mkdir -p "$APP"
+          cd "$APP"
+          printf '{"name": "sfere/packagist-check", "require": {"sfere-io/sfere-laravel": "%s"}}\n' "$VERSION" > composer.json
+          # A fresh Composer home: no token from the step above, as an app developer has.
+          COMPOSER_HOME="$RUNNER_TEMP/composer-anonymous" composer install --prefer-dist --no-interaction --no-progress
+          INSTALLED="$(php -r 'require "vendor/autoload.php"; echo Sfere\Support\Library::VERSION;')"
+          if [ "$INSTALLED" != "$VERSION" ]; then
+            echo "::error::packagist.org installed Library::VERSION=${INSTALLED}, expected ${VERSION}."
+            exit 1
+          fi
+          echo "::notice::sfere-io/sfere-laravel ${VERSION} installs from packagist.org."

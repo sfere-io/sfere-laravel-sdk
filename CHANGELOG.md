@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to `fanfinity/sfere-laravel` are documented in this file.
+All notable changes to `sfere-io/sfere-laravel` are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). The `release` workflow uses the section for the tagged version as the GitHub release notes, so write entries for app developers. Every change to the package adds an entry under `## [Unreleased]` (CI checks it; see `docs/ci-cd.md`).
 
@@ -10,6 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Published on packagist.org as `sfere-io/sfere-laravel` (the GitHub organization moved from fanfinity to sfere-io on 2026-10-20; nothing was released under the old name).
 - `track`, `identify`, `page`, `group` and `alias`. Each returns the event's messageId.
 - `Sfere::event()` fluent builder.
 - Scoped clients `forUser()`, `anonymous()` and `withContext()`, with `resolveUserIdUsing()` and `resolveTraitsUsing()` resolvers.

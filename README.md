@@ -51,11 +51,11 @@ Sfere::forUser(auth()->user())->track(Event::PURCHASE, [
 ## Installation
 
 ```bash
-composer require fanfinity/sfere-laravel
+composer require sfere-io/sfere-laravel
 php artisan sfere:install
 ```
 
-While the repository is private, Composer installs the package from GitHub: add the repository and a token first ([docs/ci-cd.md, "Consuming the package"](docs/ci-cd.md#consuming-the-package)).
+The package is published on packagist.org from its first release. Until then the repository is private, and Composer installs it from GitHub: add the repository and a token first ([docs/ci-cd.md, "Until then"](docs/ci-cd.md#until-then)).
 
 The service provider and the `Sfere` facade are auto-discovered. `sfere:install` publishes `config/sfere.php` and prints the environment variables to add:
 

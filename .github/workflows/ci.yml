@@ -396,7 +396,7 @@ jobs:
             exit 1
           fi
           {
-            echo "### Archive: fanfinity/sfere-laravel $VERSION ($(unzip -Z1 "$ZIP" | grep -vc '/$') files)"
+            echo "### Archive: sfere-io/sfere-laravel $VERSION ($(unzip -Z1 "$ZIP" | grep -vc '/$') files)"
             echo
             echo "sha256 \`$(sha256sum "$ZIP" | cut -d' ' -f1)\`"
           } >> "$GITHUB_STEP_SUMMARY"
@@ -408,10 +408,10 @@ jobs:
           unzip -q "$ZIP" -d "$RUNNER_TEMP/pkg"
           composer create-project laravel/laravel "$RUNNER_TEMP/app" --prefer-dist --no-interaction --no-progress -q
           cd "$RUNNER_TEMP/app"
-          composer config repositories.sfere "{\"type\":\"path\",\"url\":\"$RUNNER_TEMP/pkg\",\"options\":{\"symlink\":false,\"versions\":{\"fanfinity/sfere-laravel\":\"$VERSION\"}}}"
-          composer require "fanfinity/sfere-laravel:$VERSION" --no-interaction --no-progress
+          composer config repositories.sfere "{\"type\":\"path\",\"url\":\"$RUNNER_TEMP/pkg\",\"options\":{\"symlink\":false,\"versions\":{\"sfere-io/sfere-laravel\":\"$VERSION\"}}}"
+          composer require "sfere-io/sfere-laravel:$VERSION" --no-interaction --no-progress
           php artisan package:discover | tee "$RUNNER_TEMP/discover.txt"
-          grep -q 'fanfinity/sfere-laravel' "$RUNNER_TEMP/discover.txt" || { echo "::error::Auto-discovery did not register the package."; exit 1; }
+          grep -q 'sfere-io/sfere-laravel' "$RUNNER_TEMP/discover.txt" || { echo "::error::Auto-discovery did not register the package."; exit 1; }
           php artisan list --raw | grep -q '^sfere:install' || { echo "::error::The sfere:install command is not registered."; exit 1; }
           php artisan list --raw | grep -q '^sfere:test' || { echo "::error::The sfere:test command is not registered."; exit 1; }
           php artisan vendor:publish --tag=sfere-config --no-interaction

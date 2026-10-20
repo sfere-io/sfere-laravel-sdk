@@ -52,7 +52,7 @@ release; there is no registry upload. Steps, in order:
    `## [X.Y.Z] - YYYY-MM-DD` section. The tag must also point at a commit on `main`.
 2. `composer archive` of the tagged commit, and its sha256.
 3. The tag as an app consumes it: a fresh project requires
-   `fanfinity/sfere-laravel:X.Y.Z` from this repository (a `vcs` repository,
+   `sfere-io/sfere-laravel:X.Y.Z` from this repository (a `vcs` repository,
    authenticated with the Actions token), and the installed `Library::VERSION`
    must equal the tag.
 4. `gh release create vX.Y.Z` with the CHANGELOG section as notes (plus the install
@@ -60,6 +60,10 @@ release; there is no registry upload. Steps, in order:
    the version has a `-` suffix.
 5. When `PACKAGIST_USERNAME` and `PACKAGIST_TOKEN` are set, Packagist is told to
    re-read the repository (only needed on packagist.org without its GitHub app).
+6. Once the repository is public: packagist.org must list the version within 10
+   minutes, and a fresh project with no GitHub token installs it from there and gets
+   the same `Library::VERSION`. While the repository is private the step only notes
+   why it did not run.
 
 ## Releasing
 
@@ -90,10 +94,47 @@ pre-release.
 
 ## Consuming the package
 
-The repository is private, so the package is not on packagist.org yet. An app
-adds this repository as a `vcs` repository and gives Composer a GitHub token with
-read access to it (a fine-grained token with *Contents: read*, or a classic token
-with `repo`), in the developer's global Composer auth, never in the app:
+**Decided 2026-10-20: the package is public on packagist.org** as
+`sfere-io/sfere-laravel` (MIT). Apps then install it with nothing but
+
+```sh
+composer require sfere-io/sfere-laravel
+```
+
+`Library::NAME` (`@fanfinity/sfere-laravel`) does not follow the Composer rename: it is
+what every event carries in `context.library.name`, part of the wire contract shared
+with the other Sfere SDKs, and changes only together with them.
+
+### Before the repository goes public
+
+packagist.org serves public repositories only. Making this one public publishes its
+whole history, so first:
+
+1. **Move the internal documents out.** `NOTES.md`, `SFERE_SDK_SPEC.md` and
+   `SFERE_SDK_SPEC.orig.md` name the ingestion vendor and internal hosts, and
+   `NOTES.md` points at a file with live credentials in another repository. They
+   are export-ignored (they never ship in the package) but they are in the
+   repository and in every commit. Move them to a private home (for example
+   `sfere-io/sfere-sdk`), delete them here, and rewrite the history so no commit
+   carries them (or publish a fresh history from the cleaned tree). Then the
+   API contract job's three vendor-name exclusions can go.
+2. Make the repository public (Settings → General → Danger Zone).
+3. On packagist.org, signed in with the Sfere account, submit
+   `https://github.com/sfere-io/sfere-laravel-sdk` at
+   <https://packagist.org/packages/submit>, and connect the Packagist GitHub app (or
+   the repository webhook) so new tags appear by themselves. Without it, set the
+   repository secrets `PACKAGIST_USERNAME` and `PACKAGIST_TOKEN` and the release
+   workflow notifies Packagist itself.
+4. Tag the first release (`v1.0.0`, see [Releasing](#releasing)). The release
+   workflow's last step waits for packagist.org to list the version and installs it
+   from there.
+
+### Until then
+
+An app that needs the package before it is public adds this repository as a `vcs`
+repository and gives Composer a GitHub token with read access to it (a fine-grained
+token with *Contents: read*, or a classic token with `repo`), in the developer's global
+Composer auth, never in the app:
 
 ```sh
 composer config --global github-oauth.github.com <token>
@@ -103,16 +144,8 @@ composer config --global github-oauth.github.com <token>
 "repositories": [{ "type": "vcs", "url": "https://github.com/sfere-io/sfere-laravel-sdk" }]
 ```
 
-Then `composer require fanfinity/sfere-laravel`. CI systems building the app use a
+Then `composer require sfere-io/sfere-laravel`. CI systems building the app use a
 service account's token the same way (`COMPOSER_AUTH`).
-
-Still to decide: public on packagist.org (keeps the MIT licence; submit the URL at
-<https://packagist.org/packages/submit> and connect the Packagist GitHub app so
-tags appear by themselves) or private (Private Packagist, or the `vcs` setup above;
-the licence then becomes `proprietary` in `composer.json` and `LICENSE.md`). Once
-decided, add `homepage` and `support` to `composer.json`. The Composer name
-`fanfinity/sfere-laravel` and `Library::NAME` (`@fanfinity/sfere-laravel`, on the
-wire) are unchanged by the move to the `sfere-io` organization.
 
 ## Branch and tag protection
 
