@@ -5,3 +5,8 @@
 /build/
 .DS_Store
 .env
+
+# Internal build notes. They describe internal systems and must never be
+# committed to this public repository.
+/NOTES.md
+/SFERE_SDK_SPEC*.md
