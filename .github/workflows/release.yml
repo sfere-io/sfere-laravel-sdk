@@ -14,8 +14,8 @@ name: release
 # a commit on main -> install sfere-io/sfere-laravel:VERSION from this repository
 # into a fresh project, as an app would, and check the installed version -> GitHub
 # release with the CHANGELOG section as notes and the Composer archive attached
-# -> notify Packagist when its credentials are configured -> once the repository
-# is public, wait for packagist.org to list the version and install it from there,
+# -> notify Packagist when its credentials are configured -> once the package is
+# on packagist.org, wait for it to list the version and install it from there,
 # the way every app will.
 #
 # A tag never moves (the "protect-tags" ruleset): apps that installed a version
@@ -84,8 +84,8 @@ jobs:
           echo "ZIP_SHA256=$(sha256sum "$ZIP" | cut -d' ' -f1)" >> "$GITHUB_ENV"
 
       # The tag as an app consumes it: Composer resolves sfere-io/sfere-laravel:VERSION
-      # from this repository (a `vcs` repository, authenticated with the Actions
-      # token while the repository is private) and installs it with its dependencies.
+      # from this repository (a `vcs` repository, so the check does not depend on
+      # Packagist having read the tag yet) and installs it with its dependencies.
       - name: Install the tagged version as an app would
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -119,8 +119,6 @@ jobs:
             echo '```bash'
             echo "composer require sfere-io/sfere-laravel:^${VERSION}"
             echo '```'
-            echo
-            echo "While the repository is private, add it as a \`vcs\` repository and give Composer a GitHub token with read access (docs/ci-cd.md, \"Consuming the package\")."
             echo
             echo "Composer archive sha256: \`${ZIP_SHA256}\`"
           } >> "$RUNNER_TEMP/notes.md"
@@ -157,20 +155,27 @@ jobs:
             -H 'Content-Type: application/json' \
             -d "{\"repository\":{\"url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}\"}}"
 
-      # packagist.org is where apps get the package. It serves public repositories
-      # only, so while this one is private the step records why it did not run.
-      # Once public: wait for Packagist to list the version (its webhook, or the
-      # notification above, makes it re-read the tags), then install it from
-      # packagist.org alone, with no GitHub repository or token configured.
+      # packagist.org is where apps get the package. Wait for Packagist to list the
+      # version (its GitHub hook, or the notification above, makes it re-read the
+      # tags), then install it from packagist.org alone, with no GitHub repository or
+      # token configured. Before the package is submitted to packagist.org (a one-time
+      # owner step, docs/ci-cd.md "Publishing on packagist.org") the metadata URL is a
+      # 404: the step then warns and passes, because the tag and the GitHub release
+      # above are already final and Packagist reads every existing tag on submission.
       - name: Verify the version on packagist.org
-        env:
-          PUBLIC: ${{ github.event.repository.private == false }}
         run: |
-          if [ "$PUBLIC" != "true" ]; then
-            echo "The repository is private, so packagist.org cannot serve it yet; the vcs install above is the check." >> "$GITHUB_STEP_SUMMARY"
+          META="https://repo.packagist.org/p2/sfere-io/sfere-laravel.json"
+          STATUS="$(curl -sS --proto '=https' -o /dev/null -w '%{http_code}' "$META?t=$(date +%s)" || true)"
+          if [ "$STATUS" = "404" ]; then
+            echo "::warning::sfere-io/sfere-laravel is not on packagist.org yet. Submit ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY} at https://packagist.org/packages/submit (docs/ci-cd.md, \"Publishing on packagist.org\")."
+            {
+              echo "### packagist.org"
+              echo
+              echo "The package is not on packagist.org yet, so the install from packagist.org was skipped."
+              echo "Submit ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY} at https://packagist.org/packages/submit; Packagist then reads every tag, ${TAG} included."
+            } >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
-          META="https://repo.packagist.org/p2/sfere-io/sfere-laravel.json"
           for attempt in $(seq 1 40); do
             if curl -fsSL --proto '=https' "$META?t=$(date +%s)" \
                  | php -r '$m = json_decode(stream_get_contents(STDIN), true); foreach ($m["packages"]["sfere-io/sfere-laravel"] ?? [] as $p) { if (($p["version"] ?? "") === $argv[1]) exit(0); } exit(1);' "$VERSION"; then

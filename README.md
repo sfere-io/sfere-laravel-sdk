@@ -62,16 +62,16 @@ Sfere::forUser(auth()->user())->track(Event::PURCHASE, [
 ## Installation
 
 ```bash
-composer require "sfere-io/sfere-laravel:^0.1.0-beta.1"
+composer require sfere-io/sfere-laravel
 php artisan sfere:install
 ```
 
-During the beta, name the version (`^0.1.0-beta.1`): a plain `composer require` only picks stable releases. The package goes on packagist.org when the repository is public. Until then the repository is private, and Composer installs it from GitHub: add the repository and a token first ([docs/ci-cd.md, "Until then"](docs/ci-cd.md#until-then)).
+The package is on [packagist.org](https://packagist.org/packages/sfere-io/sfere-laravel), so Composer needs no extra repository or token. Composer adds the constraint `^0.1`, which stays on 0.1.x releases. Before 1.0, a breaking change moves the minor version (0.2), so upgrade to it deliberately after reading [CHANGELOG.md](CHANGELOG.md).
 
 The service provider and the `Sfere` facade are auto-discovered. `sfere:install` publishes `config/sfere.php` and prints the environment variables to add:
 
 ```dotenv
-SFERE_HOST=https://ingest.example.com
+SFERE_HOST=https://events.sfere.io
 SFERE_WRITE_KEY=keyId:secret
 ```
 
@@ -94,7 +94,7 @@ Sfere gives you two kinds of write key, both in the form `keyId:secret`:
 
 > ⚠️ A browser key is *accepted* by ingestion, but then every event reports **your server's IP** instead of your customer's. Conversions stop matching on ad platforms. If your events all show the same IP, see [Troubleshooting](#troubleshooting).
 
-`SFERE_HOST` is the ingestion origin Sfere gives you with your keys. Use the scheme and host only, with no path: `https://ingest.example.com`, not `https://ingest.example.com/v1/batch`.
+`SFERE_HOST` is the Sfere ingestion origin, `https://events.sfere.io`, unless Sfere gives you a different host with your keys. Use the scheme and host only, with no path: `https://events.sfere.io`, not `https://events.sfere.io/v1/batch`.
 
 ## Configuration
 

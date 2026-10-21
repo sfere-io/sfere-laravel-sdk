@@ -25,11 +25,11 @@ on the job that needs more.
 |---|---|---|
 | **PHP style** | `vendor/bin/pint --test` (`pint.json`, Laravel preset) | any file is not formatted. Fix: `composer format`, or let the pre-commit hook do it |
 | **Static analysis** | `composer validate --strict`, `composer audit`, PHPStan with Larastan at level 8 (`phpstan.neon`) | `composer.json` is invalid, a resolved package has a security advisory, or PHPStan reports anything |
-| **API contract** | vendor-name grep over every tracked file; on PRs, Roave's [BackwardCompatibilityCheck](https://github.com/Roave/BackwardCompatibilityCheck) against the base branch, and the version and CHANGELOG rules | the ingestion vendor is named anywhere except the internal, export-ignored `NOTES.md` and `SFERE_SDK_SPEC*.md`; the public PHP API breaks (list in the job summary) while `Library::VERSION` stays on the same major (the same minor before 1.0); the package (`src/`, `config/`, `composer.json`) changed while `Library::VERSION` is already tagged; the package changed without a `CHANGELOG.md` change (label `skip-changelog` to waive) |
+| **API contract** | vendor-name grep over every tracked file; on PRs, Roave's [BackwardCompatibilityCheck](https://github.com/Roave/BackwardCompatibilityCheck) against the base branch (its baseline, `.roave-backward-compatibility-check.xml`, ignores the new `Library::VERSION` value of a release), and the version and CHANGELOG rules | the ingestion vendor is named anywhere except the internal, export-ignored `NOTES.md` and `SFERE_SDK_SPEC*.md`; the public PHP API breaks (list in the job summary) while `Library::VERSION` stays on the same major (the same minor before 1.0); the package (`src/`, `config/`, `composer.json`) changed while `Library::VERSION` is already tagged; the package changed without a `CHANGELOG.md` change (label `skip-changelog` to waive) |
 | **Tests & coverage** | PHPUnit on PHP 8.4 / Laravel 13 with pcov: `--coverage-clover build/logs/clover.xml --log-junit build/logs/junit.xml` | a test fails (`failOnRisky`, `failOnWarning`). The summary shows the counts and the line/method coverage; `build/logs/` is the `test-results` artifact |
 | **Compatibility** | PHPUnit on PHP 8.2, 8.3, 8.4 × Laravel 12, 13 (Laravel 13 needs PHP 8.3+), plus PHP 8.2 / Laravel 12 with `--prefer-lowest`. The legs report as `PHP x / Laravel y`; the `Compatibility` job stands for all of them | any leg fails |
 | **SonarQube** | restores `test-results`, runs `SonarSource/sonarqube-scan-action` with `sonar-project.properties` | the quality gate fails (`sonar.qualitygate.wait=true`). **Skipped with a note when `SONAR_TOKEN` is not set** (Dependabot runs), so the required check still passes |
-| **Build** | `composer archive --format=zip` (what Composer ships: the repository minus the `export-ignore` paths in `.gitattributes`), then a fresh `laravel/laravel` app that installs the archive from a `path` repository | the archive lacks `composer.json`, `LICENSE.md`, `README.md`, `CHANGELOG.md`, `config/sfere.php` or the provider, or ships `tests/`, `docs/`, the tool configs or the internal notes; auto-discovery does not register the package; `sfere:install` / `sfere:test` are missing; `vendor:publish --tag=sfere-config` writes no `config/sfere.php`; the installed `Library::VERSION` differs. The zip is the `sfere-laravel` artifact |
+| **Build** | `composer archive --format=zip` (what Composer ships: the repository minus the `export-ignore` paths in `.gitattributes`), then a fresh `laravel/laravel` app that installs the archive from a `path` repository | the archive lacks `composer.json`, `LICENSE.md`, `README.md`, `CHANGELOG.md`, `config/sfere.php` or the provider, or ships `tests/`, `docs/`, the tool configs (including the BC baseline) or the internal notes; auto-discovery does not register the package; `sfere:install` / `sfere:test` are missing; `vendor:publish --tag=sfere-config` writes no `config/sfere.php`; the installed `Library::VERSION` differs. The zip is the `sfere-laravel` artifact |
 
 `tests/Unit/Core/ReleaseTest.php` runs `.github/scripts/check-release.php` in every
 test job, so a `Library::VERSION` without a dated CHANGELOG section fails a pull
@@ -52,18 +52,21 @@ release; there is no registry upload. Steps, in order:
    `## [X.Y.Z] - YYYY-MM-DD` section. The tag must also point at a commit on `main`.
 2. `composer archive` of the tagged commit, and its sha256.
 3. The tag as an app consumes it: a fresh project requires
-   `sfere-io/sfere-laravel:X.Y.Z` from this repository (a `vcs` repository,
-   authenticated with the Actions token), and the installed `Library::VERSION`
+   `sfere-io/sfere-laravel:X.Y.Z` from this repository (a `vcs` repository, so
+   this check does not wait for Packagist), and the installed `Library::VERSION`
    must equal the tag.
 4. `gh release create vX.Y.Z` with the CHANGELOG section as notes (plus the install
    snippet and the archive's sha256), the archive attached, and `--prerelease` when
    the version has a `-` suffix.
 5. When `PACKAGIST_USERNAME` and `PACKAGIST_TOKEN` are set, Packagist is told to
    re-read the repository (only needed on packagist.org without its GitHub app).
-6. Once the repository is public: packagist.org must list the version within 10
-   minutes, and a fresh project with no GitHub token installs it from there and gets
-   the same `Library::VERSION`. While the repository is private the step only notes
-   why it did not run.
+6. packagist.org must list the version within 10 minutes, and a fresh project with
+   no GitHub token installs it from there and gets the same `Library::VERSION`.
+   While the package has not been submitted to packagist.org yet (its metadata URL
+   is a 404), the step passes with a warning and a note in the run summary, so the
+   first release does not fail on the one-time owner step below. Once the package
+   exists, a version Packagist does not list within 10 minutes fails the run (check
+   the GitHub hook).
 
 ## Releasing
 
@@ -85,7 +88,9 @@ release; there is no registry upload. Steps, in order:
    Only admins can create `v*` tags (the `release-tags` ruleset), and no one can
    move or delete a tag (`protect-tags`).
 3. Watch the `release` run. When it is green, the release is at
-   https://github.com/sfere-io/sfere-laravel-sdk/releases.
+   https://github.com/sfere-io/sfere-laravel-sdk/releases and on
+   https://packagist.org/packages/sfere-io/sfere-laravel (after the one-time
+   [Publishing on packagist.org](#publishing-on-packagistorg) step).
 4. If the run fails, the tag exists and apps can already resolve it: fix forward
    with a new `Library::VERSION`, never by re-tagging.
 
@@ -94,58 +99,43 @@ pre-release.
 
 ## Consuming the package
 
-**Decided 2026-10-20: the package is public on packagist.org** as
-`sfere-io/sfere-laravel` (MIT). Apps then install it with nothing but
+The package is public on [packagist.org](https://packagist.org/packages/sfere-io/sfere-laravel)
+as `sfere-io/sfere-laravel` (MIT). Apps install it with nothing but
 
 ```sh
 composer require sfere-io/sfere-laravel
 ```
 
+No `vcs` repository, GitHub token or `minimum-stability` setting is needed: releases
+are plain `vX.Y.Z` tags, which Composer treats as stable. Composer adds the
+constraint `^0.1`; before 1.0 a breaking change moves the minor version, so `^0.1`
+never picks one up by itself.
+
 `Library::NAME` (`@fanfinity/sfere-laravel`) does not follow the Composer rename: it is
 what every event carries in `context.library.name`, part of the wire contract shared
 with the other Sfere SDKs, and changes only together with them.
 
-### Before the repository goes public
+### Publishing on packagist.org
 
-packagist.org serves public repositories only. Making this one public publishes its
-whole history, so first:
+A one-time step for the package owner, after the first release tag exists:
 
-1. **Move the internal documents out.** `NOTES.md`, `SFERE_SDK_SPEC.md` and
-   `SFERE_SDK_SPEC.orig.md` name the ingestion vendor and internal hosts, and
-   `NOTES.md` points at a file with live credentials in another repository. They
-   are export-ignored (they never ship in the package) but they are in the
-   repository and in every commit. Move them to a private home (for example
-   `sfere-io/sfere-sdk`), delete them here, and rewrite the history so no commit
-   carries them (or publish a fresh history from the cleaned tree). Then the
-   API contract job's three vendor-name exclusions can go.
-2. Make the repository public (Settings → General → Danger Zone).
-3. On packagist.org, signed in with the Sfere account, submit
-   `https://github.com/sfere-io/sfere-laravel-sdk` at
-   <https://packagist.org/packages/submit>, and connect the Packagist GitHub app (or
-   the repository webhook) so new tags appear by themselves. Without it, set the
-   repository secrets `PACKAGIST_USERNAME` and `PACKAGIST_TOKEN` and the release
-   workflow notifies Packagist itself.
-4. Tag the first release (`v0.1.0-beta.1`, see [Releasing](#releasing)). The release
-   workflow's last step waits for packagist.org to list the version and installs it
-   from there.
+1. Sign in at <https://packagist.org> with GitHub (the account that administers
+   `sfere-io`).
+2. Open <https://packagist.org/packages/submit>, enter
+   `https://github.com/sfere-io/sfere-laravel-sdk` and press **Submit**. Packagist
+   reads `composer.json` from the default branch (name `sfere-io/sfere-laravel`) and
+   every existing `v*` tag.
+3. Confirm the GitHub auto-update hook: the package page on packagist.org must not
+   show the "This package is not auto-updated" warning. If it does, connect the
+   Packagist GitHub app from the packagist.org profile page (or add the repository
+   webhook it describes). Without the hook, set the repository secrets
+   `PACKAGIST_USERNAME` and `PACKAGIST_TOKEN` and the release workflow notifies
+   Packagist itself.
+4. Check from a scratch Laravel app with no Composer token configured:
+   `composer require sfere-io/sfere-laravel` installs the latest release.
 
-### Until then
-
-An app that needs the package before it is public adds this repository as a `vcs`
-repository and gives Composer a GitHub token with read access to it (a fine-grained
-token with *Contents: read*, or a classic token with `repo`), in the developer's global
-Composer auth, never in the app:
-
-```sh
-composer config --global github-oauth.github.com <token>
-```
-
-```json
-"repositories": [{ "type": "vcs", "url": "https://github.com/sfere-io/sfere-laravel-sdk" }]
-```
-
-Then `composer require sfere-io/sfere-laravel`. CI systems building the app use a
-service account's token the same way (`COMPOSER_AUTH`).
+From then on every release tag appears on packagist.org by itself, and the release
+workflow's last step proves it.
 
 ## Branch and tag protection
 
