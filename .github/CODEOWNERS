@@ -19,6 +19,7 @@
 /pint.json                      @mabumusa1 @KaramYaaqba
 /.gitattributes                 @mabumusa1 @KaramYaaqba
 /sonar-project.properties       @mabumusa1 @KaramYaaqba
+/.roave-backward-compatibility-check.xml @mabumusa1 @KaramYaaqba
 /src/Support/Library.php        @mabumusa1 @KaramYaaqba
 /config/                        @mabumusa1 @KaramYaaqba
 /SECURITY.md                    @mabumusa1 @KaramYaaqba

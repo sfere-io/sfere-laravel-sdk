@@ -136,6 +136,8 @@ jobs:
       # methods, parameters, constants). A break is allowed only when Library::VERSION
       # moves to a new major (0.x: a new minor), the same rule apis applies to its
       # OpenAPI contract. The tool lives in its own directory, never in require-dev.
+      # It reads .roave-backward-compatibility-check.xml from the repository root: a
+      # baseline of changes that are not breaks (a new Library::VERSION value).
       - name: A breaking API change moves the major version
         if: github.event_name == 'pull_request'
         env:
@@ -149,7 +151,7 @@ jobs:
           "$BC_DIR/vendor/bin/roave-backward-compatibility-check" --from="origin/${BASE_REF}" --format=markdown > "$RUNNER_TEMP/bc.md" 2> "$RUNNER_TEMP/bc.err"
           STATUS=$?
           set -e
-          cat "$RUNNER_TEMP/bc.err"
+          cat "$RUNNER_TEMP/bc.err" "$RUNNER_TEMP/bc.md"
           if [ "$STATUS" -eq 0 ]; then
             echo "No backwards-incompatible changes against ${BASE_REF}."
             exit 0
@@ -391,7 +393,7 @@ jobs:
           for f in composer.json LICENSE.md README.md CHANGELOG.md config/sfere.php src/SfereServiceProvider.php src/Support/Library.php; do
             grep -qx "$f" "$RUNNER_TEMP/contents.txt" || { echo "::error::$f is missing from the archive."; exit 1; }
           done
-          if grep -E '^(vendor/|build/|tests/|\.github/|\.githooks/|docs/|NOTES\.md|SFERE_SDK_SPEC|phpunit\.xml\.dist|phpstan\.neon|pint\.json|sonar-project\.properties)' "$RUNNER_TEMP/contents.txt"; then
+          if grep -E '^(vendor/|build/|tests/|\.github/|\.githooks/|docs/|NOTES\.md|SFERE_SDK_SPEC|phpunit\.xml\.dist|phpstan\.neon|pint\.json|sonar-project\.properties|\.roave-backward-compatibility-check\.xml)' "$RUNNER_TEMP/contents.txt"; then
             echo "::error::The archive ships the development files listed above. Mark them export-ignore in .gitattributes."
             exit 1
           fi

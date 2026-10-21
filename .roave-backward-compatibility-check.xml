@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!--
+    Roave BackwardCompatibilityCheck baseline, read by CI's "API contract" job.
+
+    Library::VERSION is the release number every event reports; it changes on every
+    release, so a new value is not an API break. Only list changes here that are
+    deliberately not breaks; a real break moves Library::VERSION instead.
+-->
+<roave-bc-check
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:noNamespaceSchemaLocation="vendor/roave/backward-compatibility-check/Resources/schema.xsd">
+    <baseline>
+        <ignored-regex>#\[BC\] CHANGED: Value of constant Sfere\\Support\\Library::VERSION changed#</ignored-regex>
+    </baseline>
+</roave-bc-check>
