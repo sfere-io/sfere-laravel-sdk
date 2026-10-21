@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-10-21
+
+First release on packagist.org. The public API and the wire format are the same as in 0.1.0-beta.1.
+
+### Changed
+
+- Install with `composer require sfere-io/sfere-laravel`. No `vcs` repository, GitHub token or explicit pre-release constraint is needed.
+- The README setup example uses the production ingestion host, `SFERE_HOST=https://events.sfere.io`.
+
 ## [0.1.0-beta.1] - 2026-10-20
 
 ### Added
@@ -33,5 +42,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Validation: messageId format, event name length, placeholder user ids, a userId or anonymousId required, and a 900 KB event size limit.
 - No-op mode with a single warning when the SDK is disabled or misconfigured.
 
-[Unreleased]: https://github.com/sfere-io/sfere-laravel-sdk/compare/v0.1.0-beta.1...HEAD
+[Unreleased]: https://github.com/sfere-io/sfere-laravel-sdk/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/sfere-io/sfere-laravel-sdk/compare/v0.1.0-beta.1...v0.1.0
 [0.1.0-beta.1]: https://github.com/sfere-io/sfere-laravel-sdk/releases/tag/v0.1.0-beta.1

@@ -2,8 +2,9 @@
 
 ## Reporting a Vulnerability
 
-This repository is private. Please do **not** open a public issue or discuss the
-vulnerability in a pull request.
+This repository and the package on packagist.org are public. Please do **not**
+open an issue or discuss the vulnerability in a pull request: both are visible to
+everyone.
 
 Report vulnerabilities privately to the repository administrators
 (@mabumusa1, @KaramYaaqba) — never in an issue or pull request. Contact the

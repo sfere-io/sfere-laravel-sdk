@@ -10,7 +10,7 @@ final class Library
     public const NAME = '@fanfinity/sfere-laravel';
 
     /** Bumped on every release (see CHANGELOG.md). */
-    public const VERSION = '0.1.0-beta.1';
+    public const VERSION = '0.1.0';
 
     public static function userAgent(): string
     {
