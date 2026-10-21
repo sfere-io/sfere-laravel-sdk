@@ -87,6 +87,10 @@ The SDK treats any 2xx without `ok === true` as a failure, as the Salla and Zid 
 | `screen` | Listed type | Not exposed | Mobile only |
 | Event names | GA4 names (EVENTS.md) | GA4 constants in `Sfere\Ecommerce\Event`, not enforced | Matches EVENTS.md ("any other name is accepted and forwarded as-is"). The fork's adapters also accept Segment spec names |
 
+## Distribution
+
+Public on packagist.org as `sfere-io/sfere-laravel` from 0.1.0: `composer require sfere-io/sfere-laravel`, no repository or token. Release flow and the one-time Packagist submission: `docs/ci-cd.md` ("Releasing", "Publishing on packagist.org").
+
 ## Open owner actions (spec §15)
 
 1. **Contract update** in `fanfinity/sfere-sdk`:
@@ -100,7 +104,7 @@ The SDK treats any 2xx without `ok === true` as a failure, as the Salla and Zid 
    - `LICENSE.md` is MIT (copyright 2026 Fanfinity), as the original spec asked.
    - `@fanfinity/sfere-node` is `UNLICENSED`.
    - **Pending owner confirmation** before publishing to Packagist.
-4. **Host value:** confirm the per-tenant ingestion origin merchants put in `SFERE_HOST`. Backend config currently points to `https://console.fanfinity.io`.
+4. **Host value (decided 2026-10-21):** the production ingestion origin is `https://events.sfere.io`, shown as `SFERE_HOST` in the README setup example.
 5. **Credential hygiene (unrelated to this package):** `backend/push_events_demo57.py:7-17` hardcodes a live API key, a write key and ClickHouse credentials. Rotate them and remove them from the file.
 
 ## How the Phase 2 live test is done
