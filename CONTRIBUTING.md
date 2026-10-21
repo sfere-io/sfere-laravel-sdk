@@ -4,13 +4,13 @@
 
 - Everything lands on `main` through a pull request. Direct pushes, force-pushes,
   and branch deletion are blocked by repository rulesets — including for admins.
-- What goes on the wire follows sfere-sdk `docs/WIRE-CONTRACT.md` and
-  `docs/EVENTS.md`; `SFERE_SDK_SPEC.md` and `NOTES.md` record how this package
-  meets them. The SDK never hashes emails or phone numbers and talks only to
+- What goes on the wire follows sfere-js-sdk `docs/WIRE-CONTRACT.md` and
+  `docs/EVENTS.md`. The SDK never hashes emails or phone numbers and talks only to
   `SFERE_HOST`.
-- Never name the ingestion vendor in code or in anything that ships: say "Sfere
-  ingestion". Only the internal build notes (`NOTES.md`, `SFERE_SDK_SPEC*.md`,
-  export-ignored) may.
+- Never name the ingestion vendor anywhere in this repository: say "Sfere
+  ingestion". Internal build notes, specs and anything describing internal systems
+  stay out of this public repository; `NOTES.md` and `SFERE_SDK_SPEC*.md` are
+  git-ignored.
 - Secrets never enter the repository. Staging keys go in the git-ignored `.env`;
   tests use fakes.
 

@@ -102,13 +102,11 @@ jobs:
 
       # Client-facing material never names the ingestion vendor (company rule).
       # Checked on every tracked file, code included: the SDK says "Sfere ingestion".
-      # NOTES.md and SFERE_SDK_SPEC*.md are the internal build notes: export-ignored
-      # in .gitattributes, so they never reach an app's vendor/ directory.
       - name: No vendor names
         run: |
           # Spelled in pieces so this workflow does not match its own check.
           PATTERN='jit''su|air''byte|click''house'
-          if git grep -n -i -E "$PATTERN" -- . ':!NOTES.md' ':!SFERE_SDK_SPEC.md' ':!SFERE_SDK_SPEC.orig.md'; then
+          if git grep -n -i -E "$PATTERN"; then
             echo "::error::The ingestion vendor is named above. Say 'Sfere ingestion' (rule in CONTRIBUTING.md)."
             exit 1
           fi
